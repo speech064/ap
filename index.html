@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>제주 지금 날씨</title>
+<style>
+  :root{--bg:#eaf6f7;--card:#fff;--ink:#12343b;--sub:#5b7a80;--brand:#0e7c86}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Noto Sans KR',system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+  main{max-width:640px;margin:0 auto;padding:24px 16px 48px}
+  h1{font-size:1.5rem;margin:0 0 4px}
+  .sub{color:var(--sub);margin:0 0 16px;font-size:.9rem}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .tabs button{border:1px solid var(--brand);background:#fff;color:var(--brand);padding:8px 14px;border-radius:999px;font:inherit;cursor:pointer}
+  .tabs button[aria-pressed=true]{background:var(--brand);color:#fff}
+  .card{background:var(--card);border-radius:16px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+  .big{display:flex;align-items:center;gap:16px}
+  .big .emoji{font-size:4rem}
+  .big .temp{font-size:3rem;font-weight:700}
+  .big .state{color:var(--sub)}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:20px}
+  .grid div{background:var(--bg);border-radius:12px;padding:12px}
+  .grid small{display:block;color:var(--sub)}
+  .grid b{font-size:1.1rem}
+  .msg{color:#a33;margin-top:12px}
+  footer{margin-top:16px;color:var(--sub);font-size:.8rem;line-height:1.6}
+</style>
+</head>
+<body>
+<main>
+  <h1>🌊 제주 지금 날씨</h1>
+  <p class="sub">기상청 초단기실황 · 지역을 고르면 지금 관측 값을 보여줘요.</p>
+  <div class="tabs" id="tabs"></div>
+  <div class="card" id="card">불러오는 중…</div>
+  <footer>
+    데이터: 기상청 단기예보 조회서비스(공공데이터포털). 지역별 값은 대략적인 격자 기준이에요.<br>
+    API 인증키는 서버(Vercel 환경변수)에만 있고, 이 페이지에는 들어 있지 않아요.
+  </footer>
+</main>
+<script>
+const PLACES = [
+  { name: '제주시', nx: 53, ny: 38 },
+  { name: '서귀포', nx: 52, ny: 33 },
+  { name: '성산', nx: 60, ny: 37 }
+];
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const PTY = { 0: ['☀️', '강수 없음'], 1: ['🌧️', '비'], 2: ['🌨️', '비/눈'], 3: ['❄️', '눈'], 5: ['🌦️', '빗방울'], 6: ['🌨️', '빗방울/눈날림'], 7: ['❄️', '눈날림'] };
+const dir = d => ['북', '북동', '동', '남동', '남', '남서', '서', '북서'][Math.round(d / 45) % 8];
+
+function paint(place, data) {
+  const v = data.values, pty = Number(v.PTY || 0), [emoji, label] = PTY[pty] || ['🌤️', '정보 없음'];
+  const t = data.base.time.slice(0, 2) + ':00';
+  $('#card').innerHTML = `
+    <div class="big"><span class="emoji">${emoji}</span><div><div class="temp">${esc(v.T1H)}°C</div><div class="state">${esc(place.name)} · ${esc(label)}</div></div></div>
+    <div class="grid">
+      <div><small>습도</small><b>${esc(v.REH)}%</b></div>
+      <div><small>1시간 강수량</small><b>${esc(v.RN1)}</b></div>
+      <div><small>풍속</small><b>${esc(v.WSD)} m/s</b></div>
+      <div><small>풍향</small><b>${esc(dir(Number(v.VEC)))}풍</b></div>
+    </div>
+    <p class="sub" style="margin-top:16px">${esc(t)} 기준 관측</p>`;
+}
+
+async function load(place) {
+  $('#card').textContent = '불러오는 중…';
+  try {
+    const r = await fetch(`/api/weather?nx=${place.nx}&ny=${place.ny}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || '요청 실패');
+    paint(place, data);
+  } catch (e) {
+    $('#card').innerHTML = `<p class="msg">날씨를 불러오지 못했어요: ${esc(e.message)}</p>`;
+  }
+}
+
+function select(i) {
+  [...$('#tabs').children].forEach((b, k) => b.setAttribute('aria-pressed', k === i));
+  load(PLACES[i]);
+}
+PLACES.forEach((p, i) => {
+  const b = document.createElement('button'); b.textContent = p.name; b.onclick = () => select(i); $('#tabs').append(b);
+});
+select(0);
+</script>
+</body>
+</html>
